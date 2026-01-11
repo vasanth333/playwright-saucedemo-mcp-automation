@@ -39,7 +39,7 @@ jobs:
           sudo mv allure-* /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
 
-      - name: Run tests
+      - name: Run tests and generate browser report
         run: |
           export ALLURE_RESULTS_DIRECTORY=allure-results-${{ matrix.browser }}
 
@@ -76,39 +76,32 @@ jobs:
           sudo mv allure-* /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
 
-      - name: Download all results
+      - name: Download all allure results
         uses: actions/download-artifact@v4
         with:
           pattern: allure-results-*
           path: all-results
           merge-multiple: true
 
-      - name: Download all reports
+      - name: Download all browser reports
         uses: actions/download-artifact@v4
         with:
           pattern: allure-report-*
           path: site
           merge-multiple: true
 
-      - name: Build master report
+      - name: Build master report and dashboard
         run: |
           mkdir -p site
           mkdir -p master-results
 
-          echo "Checking downloaded allure results..."
-
           if [ -d "all-results" ]; then
-            echo "Found all-results directory"
             find all-results -name "*.json" -exec cp {} master-results \;
-          else
-            echo "WARNING: all-results directory not found"
           fi
 
           if [ "$(ls -A master-results 2>/dev/null)" ]; then
-            echo "Generating MASTER Allure report"
             allure generate master-results -o site/master-allure-report --clean
           else
-            echo "No results found — creating fallback report"
             mkdir -p site/master-allure-report
             echo "<html><body><h1>No test results found</h1></body></html>" > site/master-allure-report/index.html
           fi
@@ -116,7 +109,9 @@ jobs:
           cat <<EOF > site/index.html
           <!DOCTYPE html>
           <html>
-          <head><title>Playwright Allure Reports</title></head>
+          <head>
+            <title>Playwright Allure Reports</title>
+          </head>
           <body>
             <h1>Playwright Allure Reports</h1>
             <ul>
@@ -129,10 +124,17 @@ jobs:
           </html>
           EOF
 
+      - name: Verify Pages content
+        run: |
+          echo "Pages root contents:"
+          ls -la site
+          echo "Index file check:"
+          ls -la site/index.html
+
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: site/
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
