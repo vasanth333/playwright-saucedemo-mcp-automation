@@ -74,72 +74,88 @@ jobs:
           path: output/
           retention-days: 30
 
-  # Deploy to GitHub Pages (only on main)
-  deploy:
+  # Create comprehensive test report (no GitHub Pages needed)
+  report:
     if: github.ref == 'refs/heads/main' && always()
     needs: test
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Download all artifacts
+      - name: Download all test artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: test-results-*
           path: reports/
           merge-multiple: false
 
-      - name: Create main index page
+      - name: Create comprehensive test summary
         run: |
-          mkdir -p site
-          cat > site/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Playwright Test Reports</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              .browser { margin: 20px 0; padding: 20px; border: 1px solid #ddd; }
-              a { color: #0066cc; text-decoration: none; }
-              a:hover { text-decoration: underline; }
-            </style>
-          </head>
-          <body>
-            <h1>🎭 Playwright Test Reports</h1>
-            <p><strong>Generated:</strong> $(date)</p>
-            <div class="browser">
-              <h2>📱 Chromium Results</h2>
-              <a href="reports/test-results-chromium/">View Chromium Results</a>
-            </div>
-            <div class="browser">
-              <h2>🦊 Firefox Results</h2>
-              <a href="reports/test-results-firefox/">View Firefox Results</a>
-            </div>
-            <div class="browser">
-              <h2>🧭 WebKit Results</h2>
-              <a href="reports/test-results-webkit/">View WebKit Results</a>
-            </div>
-          </body>
-          </html>
-          EOF
+          mkdir -p final-report
+          
+          # Create markdown summary
+          cat > final-report/TEST_REPORT.md << 'EOF'
+# 🎭 Playwright Test Report
 
-          # Copy all reports
-          cp -r reports site/ || true
+**Generated:** $(date)  
+**Repository:** ${{ github.repository }}  
+**Branch:** ${{ github.ref_name }}  
+**Commit:** ${{ github.sha }}  
+**Run:** ${{ github.run_id }}
 
-          # List what we have
-          echo "Site contents:"
-          find site -type f | head -20
+## 📊 Test Results
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+This report contains test results from multiple browsers:
 
-      - name: Upload to Pages
-        uses: actions/upload-pages-artifact@v3
+EOF
+
+          # List available reports
+          if [ -d "reports" ]; then
+            echo "### 🌐 Browser Test Results" >> final-report/TEST_REPORT.md
+            echo "" >> final-report/TEST_REPORT.md
+            for dir in reports/test-results-*/; do
+              if [ -d "$dir" ]; then
+                browser=$(basename "$dir" | sed 's/test-results-//')
+                echo "- **${browser^}** browser tests completed" >> final-report/TEST_REPORT.md
+              fi
+            done
+            echo "" >> final-report/TEST_REPORT.md
+            
+            # Copy all artifacts
+            cp -r reports/* final-report/ 2>/dev/null || true
+          else
+            echo "⚠️ No test artifacts were generated." >> final-report/TEST_REPORT.md
+          fi
+
+          echo "" >> final-report/TEST_REPORT.md
+          echo "## 📁 Accessing Reports" >> final-report/TEST_REPORT.md
+          echo "" >> final-report/TEST_REPORT.md
+          echo "1. Download this 'comprehensive-test-report' artifact" >> final-report/TEST_REPORT.md
+          echo "2. Extract the ZIP file" >> final-report/TEST_REPORT.md
+          echo "3. Open any \`index.html\` file in your browser" >> final-report/TEST_REPORT.md
+          echo "" >> final-report/TEST_REPORT.md
+          echo "🔗 **Direct Link:** [View this run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> final-report/TEST_REPORT.md
+
+      - name: Upload comprehensive test report
+        uses: actions/upload-artifact@v4
         with:
-          path: site
+          name: comprehensive-test-report
+          path: final-report/
+          retention-days: 30
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Display report info
+        run: |
+          echo "✅ Comprehensive test report created successfully!"
+          echo ""
+          echo "📊 Report Details:"
+          echo "   • Name: comprehensive-test-report"
+          echo "   • Contains: All browser test results + summary"
+          echo "   • Retention: 30 days"
+          echo ""
+          echo "🔗 Access your reports:"
+          echo "   1. Go to: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "   2. Scroll to 'Artifacts' section"
+          echo "   3. Download 'comprehensive-test-report'"
+          echo "   4. Extract and open index.html files"
+          echo ""
+          echo "🎯 No GitHub Pages setup required!"
