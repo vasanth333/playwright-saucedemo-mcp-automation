@@ -1,0 +1,269 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+
+env:
+  TEST_ENV: test
+
+jobs:
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps ${{ matrix.project }}
+      
+    - name: Run Playwright tests
+      run: npm run test:ci -- --project=${{ matrix.project }}
+      env:
+        TEST_ENV: test
+        HEADLESS: true
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-results-${{ matrix.project }}
+        path: |
+          test-results/
+          playwright-report/
+        retention-days: 7
+        
+    - name: Upload HTML report to GitHub Pages
+      if: always() && matrix.project == 'chromium'
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: test-results/html-report
+        destination_dir: test-reports/${{ github.run_number }}
+
+  smoke-tests:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - run: npm ci
+    - run: npx playwright install chromium --with-deps
+    - run: npm run test:smoke
+      
+  data-driven-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - run: npm ci
+    - run: npx playwright install chromium --with-deps
+    - run: npm run test:data-driven
+
+  notification:
+    needs: [test, smoke-tests, data-driven-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Determine overall status
+      id: status
+      run: |
+        if [[ "${{ needs.test.result }}" == "success" && "${{ needs.smoke-tests.result }}" == "success" && "${{ needs.data-driven-tests.result }}" == "success" ]]; then
+          echo "status=✅ All tests passed" >> $GITHUB_OUTPUT
+          echo "color=good" >> $GITHUB_OUTPUT
+          echo "result=success" >> $GITHUB_OUTPUT
+        else
+          echo "status=❌ Some tests failed" >> $GITHUB_OUTPUT
+          echo "color=danger" >> $GITHUB_OUTPUT
+          echo "result=failure" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+        echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+        echo "run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+
+    - name: Send Slack notification (via webhook)
+      if: always() && vars.SLACK_WEBHOOK_URL != ''
+      run: |
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{
+            "text": "🧪 Playwright Test Results",
+            "attachments": [
+              {
+                "color": "${{ steps.status.outputs.color }}",
+                "title": "Test Execution Report",
+                "title_link": "${{ steps.status.outputs.run_url }}",
+                "fields": [
+                  {
+                    "title": "Repository",
+                    "value": "${{ steps.status.outputs.repo }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Branch", 
+                    "value": "${{ steps.status.outputs.branch }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Overall Status",
+                    "value": "${{ steps.status.outputs.status }}",
+                    "short": false
+                  },
+                  {
+                    "title": "Job Results",
+                    "value": "Main Tests: ${{ needs.test.result }}\nSmoke Tests: ${{ needs.smoke-tests.result }}\nData-Driven Tests: ${{ needs.data-driven-tests.result }}",
+                    "short": false
+                  }
+                ],
+                "footer": "GitHub Actions",
+                "ts": '${{ github.event.head_commit.timestamp }}'
+              }
+            ]
+          }' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Send Teams notification (via webhook)  
+      if: always() && vars.TEAMS_WEBHOOK_URL != ''
+      run: |
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{
+            "@type": "MessageCard",
+            "@context": "https://schema.org/extensions",
+            "summary": "Playwright Test Results",
+            "themeColor": "${{ steps.status.outputs.result == 'success' && '00FF00' || 'FF0000' }}",
+            "sections": [
+              {
+                "activityTitle": "🧪 Playwright Test Results",
+                "activitySubtitle": "${{ steps.status.outputs.repo }} - ${{ steps.status.outputs.branch }}",
+                "facts": [
+                  {
+                    "name": "Overall Status:",
+                    "value": "${{ steps.status.outputs.status }}"
+                  },
+                  {
+                    "name": "Main Tests:",
+                    "value": "${{ needs.test.result }}"
+                  },
+                  {
+                    "name": "Smoke Tests:",
+                    "value": "${{ needs.smoke-tests.result }}"
+                  },
+                  {
+                    "name": "Data-Driven Tests:",
+                    "value": "${{ needs.data-driven-tests.result }}"
+                  }
+                ]
+              }
+            ],
+            "potentialAction": [
+              {
+                "@type": "OpenUri",
+                "name": "View Results",
+                "targets": [
+                  {
+                    "os": "default",
+                    "uri": "${{ steps.status.outputs.run_url }}"
+                  }
+                ]
+              }
+            ]
+          }' \
+          ${{ secrets.TEAMS_WEBHOOK_URL }}
+      env:
+        TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const testResult = '${{ steps.status.outputs.result }}';
+          const emoji = testResult === 'success' ? '✅' : '❌';
+          const body = `
+          ${emoji} **Playwright Test Results**
+          
+          **Overall Status**: ${{ steps.status.outputs.status }}
+          **Branch**: ${{ steps.status.outputs.branch }}
+          **Commit**: \`${{ github.sha }}\`
+          
+          | Job | Status |
+          |-----|--------|
+          | Main Tests | ${{ needs.test.result }} |
+          | Smoke Tests | ${{ needs.smoke-tests.result }} |
+          | Data-Driven Tests | ${{ needs.data-driven-tests.result }} |
+          
+          [📋 View detailed report](${{ steps.status.outputs.run_url }})
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## 🧪 Playwright Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Repository**: ${{ steps.status.outputs.repo }}" >> $GITHUB_STEP_SUMMARY  
+        echo "**Branch**: ${{ steps.status.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Suite | Result |" >> $GITHUB_STEP_SUMMARY
+        echo "|------------|---------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Main Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY  
+        echo "| Data-Driven Tests | ${{ needs.data-driven-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "[View detailed results](${{ steps.status.outputs.run_url }})" >> $GITHUB_STEP_SUMMARY
+
+  deploy-reports:
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download test artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: playwright-results-*
+        merge-multiple: true
+        path: all-results
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: all-results
+        destination_dir: reports/latest

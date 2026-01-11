@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  playwright-tests:
+    build: .
+    environment:
+      - TEST_ENV=${TEST_ENV:-test}
+      - HEADLESS=true
+      - WORKERS=4
+    volumes:
+      - ./test-results:/app/test-results
+    networks:
+      - test-network
+
+  test-dev:
+    extends: playwright-tests
+    environment:
+      - TEST_ENV=dev
+    command: npm run test:env:dev
+
+  test-stage:
+    extends: playwright-tests  
+    environment:
+      - TEST_ENV=stage
+    command: npm run test:env:stage
+
+networks:
+  test-network:
+    driver: bridge
