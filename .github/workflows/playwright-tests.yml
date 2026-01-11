@@ -124,38 +124,138 @@ jobs:
       - name: Create Master Comprehensive Report
         run: |
           mkdir -p comprehensive-report
+          mkdir -p master-allure-results
 
-          echo "Combining all Allure results for comprehensive report..."
+          echo "=== DEBUGGING: Available downloads ==="
+          echo "Downloaded results:"
+          if [ -d "downloaded-results" ]; then
+            find downloaded-results -type f -name "*.json" | head -10
+            echo "Total JSON files: $(find downloaded-results -name "*.json" | wc -l)"
+          else
+            echo "No downloaded-results directory found"
+          fi
 
+          echo "Downloaded reports:"
           if [ -d "downloaded-reports" ]; then
-            echo "Found downloaded browser reports:"
             ls -la downloaded-reports/
-            
+          else
+            echo "No downloaded-reports directory found"
+          fi
+
+          echo "=== STEP 1: Copy individual browser reports ==="
+          if [ -d "downloaded-reports" ]; then
             for report_dir in downloaded-reports/*/; do
               if [ -d "$report_dir" ]; then
                 report_name=$(basename "$report_dir")
-                echo "Copying $report_name..."
+                echo "Copying $report_name to comprehensive-report/"
                 cp -r "$report_dir" "comprehensive-report/$report_name"
+                
+                # Verify the copy worked
+                if [ -f "comprehensive-report/$report_name/index.html" ]; then
+                  echo "✅ $report_name copied successfully"
+                else
+                  echo "❌ $report_name copy failed - no index.html found"
+                fi
               fi
             done
-            
-            echo "Browser reports copied to comprehensive-report:"
-            ls -la comprehensive-report/
           fi
 
-          mkdir -p master-allure-results
+          echo "=== STEP 2: Create master combined report ==="
           if [ -d "downloaded-results" ]; then
-            echo "Found Allure results for master report:"
+            echo "Combining all JSON results for master report..."
+            
+            # Copy all JSON files to master results
             find downloaded-results -name "*.json" -exec cp {} master-allure-results/ \; 2>/dev/null || true
             
+            echo "Master allure results collected:"
+            ls -la master-allure-results/
+            
             if [ "$(ls -A master-allure-results 2>/dev/null)" ]; then
-              echo "Generating master comprehensive Allure report..."
+              echo "Generating MASTER comprehensive Allure report..."
               allure generate master-allure-results --output comprehensive-report/master-allure-report --clean
               
-              echo "Master report generated:"
-              ls -la comprehensive-report/master-allure-report/
+              # Verify master report was created
+              if [ -f "comprehensive-report/master-allure-report/index.html" ]; then
+                echo "✅ Master Allure report generated successfully!"
+                echo "Master report files:"
+                ls -la comprehensive-report/master-allure-report/ | head -5
+              else
+                echo "❌ Master report generation FAILED - no index.html created"
+                echo "Allure generate output was:"
+                ls -la comprehensive-report/
+              fi
+            else
+              echo "❌ No JSON results found for master report"
+              echo "Creating fallback master report with summary..."
+              mkdir -p comprehensive-report/master-allure-report
+              cat > comprehensive-report/master-allure-report/index.html << 'FALLBACK'
+              <!DOCTYPE html>
+              <html><head><title>Master Report</title></head>
+              <body><h1>Master Report</h1><p>No test results found for master report generation.</p></body>
+              </html>
+              FALLBACK
             fi
+          else
+            echo "❌ No downloaded-results directory found"
           fi
+
+          echo "=== FINAL: Verify comprehensive report structure ==="
+          echo "Comprehensive report contents:"
+          find comprehensive-report -name "index.html" -type f
+
+          echo "=== CREATING NAVIGATION INDEX ==="
+          cat > comprehensive-report/index.html << 'NAVINDEX'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Playwright Test Reports - Navigation</title>
+              <style>
+                  body { font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5; }
+                  .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                  h1 { color: #333; text-align: center; margin-bottom: 30px; }
+                  .report-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
+                  .report-link { display: inline-block; margin: 10px; padding: 15px 25px; background: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }
+                  .report-link:hover { background: #0052a3; }
+                  .master-report { background: #28a745; }
+                  .master-report:hover { background: #218838; }
+                  .note { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin: 15px 0; color: #856404; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🎭 Playwright Test Reports Dashboard</h1>
+                  
+                  <div class="report-section">
+                      <h2>📊 Master Comprehensive Report</h2>
+                      <p>Combined results from all browser test runs</p>
+                      <a href="master-allure-report/index.html" class="report-link master-report">📈 View Master Report</a>
+                  </div>
+                  
+                  <div class="report-section">
+                      <h2>🌐 Individual Browser Reports</h2>
+                      <p>Detailed reports for each browser environment</p>
+                      <a href="chromium-report/index.html" class="report-link">🟢 Chromium Report</a>
+                      <a href="firefox-report/index.html" class="report-link">🟠 Firefox Report</a>
+                      <a href="webkit-report/index.html" class="report-link">🔵 WebKit Report</a>
+                  </div>
+                  
+                  <div class="note">
+                      <strong>💡 Note:</strong> If any report links don't work, check that the corresponding tests ran successfully and generated reports. 
+                      The master report combines data from all successful browser test runs.
+                  </div>
+              </div>
+          </body>
+          </html>
+          NAVINDEX
+
+          echo "✅ Navigation index created at comprehensive-report/index.html"
+          echo "✅ Comprehensive report structure ready!"
+
+          echo "=== FINAL VERIFICATION ==="
+          echo "All generated files:"
+          find comprehensive-report -type f -name "*.html" | sort
 
       - name: Create Navigation Index
         run: |
