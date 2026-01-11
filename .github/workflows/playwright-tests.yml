@@ -9,6 +9,11 @@ on:
     # Run tests daily at 6 AM UTC
     - cron: '0 6 * * *'
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 env:
   TEST_ENV: test
 
@@ -59,12 +64,13 @@ jobs:
         retention-days: 7
         
     - name: Upload HTML report to GitHub Pages
-      if: always() && matrix.project == 'chromium'
+      if: always() && matrix.project == 'chromium' && github.ref == 'refs/heads/main'
       uses: peaceiris/actions-gh-pages@v4
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: test-results/html-report
+        personal_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: playwright-report
         destination_dir: test-reports/${{ github.run_number }}
+        force_orphan: true
 
   smoke-tests:
     timeout-minutes: 10
