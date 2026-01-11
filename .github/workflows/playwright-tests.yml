@@ -92,22 +92,22 @@ jobs:
       - name: Create comprehensive test summary
         run: |
           mkdir -p final-report
-          
+
           # Create markdown summary
           cat > final-report/TEST_REPORT.md << 'EOF'
-# 🎭 Playwright Test Report
+          # 🎭 Playwright Test Report
 
-**Generated:** $(date)  
-**Repository:** ${{ github.repository }}  
-**Branch:** ${{ github.ref_name }}  
-**Commit:** ${{ github.sha }}  
-**Run:** ${{ github.run_id }}
+          **Generated:** $(date)  
+          **Repository:** ${{ github.repository }}  
+          **Branch:** ${{ github.ref_name }}  
+          **Commit:** ${{ github.sha }}  
+          **Run:** ${{ github.run_id }}
 
-## 📊 Test Results
+          ## 📊 Test Results
 
-This report contains test results from multiple browsers:
+          This report contains test results from multiple browsers:
 
-EOF
+          EOF
 
           # List available reports
           if [ -d "reports" ]; then

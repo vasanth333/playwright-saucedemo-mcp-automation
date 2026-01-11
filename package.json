@@ -4,50 +4,40 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:ui": "playwright test --ui",
-    
     "test:auth": "playwright test tests/authentication/ --reporter=html",
-    "test:inventory": "playwright test tests/inventory/ --reporter=html", 
+    "test:inventory": "playwright test tests/inventory/ --reporter=html",
     "test:cart": "playwright test tests/cart/ --reporter=html",
     "test:data-driven": "playwright test tests/authentication/data-driven-login.spec.ts tests/inventory/data-driven-products.spec.ts --reporter=html",
-    
     "test:smoke": "playwright test --grep @smoke --reporter=line",
     "test:regression": "playwright test --grep @regression --reporter=html",
     "test:critical": "playwright test --grep @critical --reporter=line",
-    
     "test:parallel": "playwright test --workers=4 --reporter=html",
     "test:chrome": "playwright test --project=chromium --reporter=html",
-    "test:firefox": "playwright test --project=firefox --reporter=html", 
+    "test:firefox": "playwright test --project=firefox --reporter=html",
     "test:safari": "playwright test --project=webkit --reporter=html",
     "test:mobile": "playwright test --project=mobile-chrome --reporter=html",
-    
     "test:env:dev": "TEST_ENV=dev playwright test --reporter=html",
     "test:env:test": "TEST_ENV=test playwright test --reporter=html",
     "test:env:stage": "TEST_ENV=stage playwright test --reporter=html",
     "test:env:prod": "TEST_ENV=prod playwright test --reporter=html",
-    
-    "test:ci": "playwright test --reporter=html,junit,json --output-dir=test-results",
-    "test:ci:parallel": "playwright test --workers=4 --reporter=html,junit,json --output-dir=test-results",
+    "test:ci": "playwright test --reporter=html,junit,json",
+    "test:ci:parallel": "playwright test --workers=4 --reporter=html,junit,json",
     "test:ci:headless": "playwright test --headed=false --reporter=html,junit,json",
-    
     "test:visual": "playwright test --grep @visual --reporter=html",
     "test:visual:update": "playwright test --grep @visual --update-snapshots",
     "test:visual:debug": "playwright test --grep @visual --debug",
     "test:visual:headed": "playwright test --grep @visual --headed",
     "test:visual:chrome": "playwright test --grep @visual --project=chromium",
     "test:visual:compare": "playwright test --grep @visual --reporter=html --update-snapshots=missing",
-    
     "report:html": "playwright show-report test-results/html-report",
     "report:allure": "allure serve test-results/allure-results",
     "report:open": "open test-results/html-report/index.html",
-    
     "install:browsers": "playwright install",
     "install:deps": "playwright install-deps",
     "setup:ci": "npm ci && npm run install:browsers && npm run install:deps",
-    
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
     "clean": "rm -rf test-results playwright-report",
-    
     "test:help": "echo 'Available test commands:' && grep '^    \"test:' package.json | sed 's/.*\"\\(.*\\)\".*/  \\1/'"
   },
   "devDependencies": {
