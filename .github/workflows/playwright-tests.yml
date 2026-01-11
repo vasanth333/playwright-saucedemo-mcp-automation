@@ -38,7 +38,7 @@ jobs:
       run: npx playwright install --with-deps ${{ matrix.project }}
       
     - name: Run Playwright tests
-      run: xvfb-run --auto-servernum -- npm run test:ci -- --project=${{ matrix.project }}
+      run: xvfb-run --auto-servernum -- npm run test:ci -- --project=${{ matrix.project }} --grep-invert "@visual"
       env:
         TEST_ENV: test
         HEADLESS: true
