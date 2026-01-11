@@ -126,23 +126,23 @@ jobs:
           mkdir -p comprehensive-report
           mkdir -p master-allure-results
 
-          echo "=== DEBUGGING: Available downloads ==="
-          echo "Downloaded results:"
+          echo "=== DEBUGGING - Available downloads ==="
+          echo "Downloaded results check"
           if [ -d "downloaded-results" ]; then
             find downloaded-results -type f -name "*.json" | head -10
-            echo "Total JSON files: $(find downloaded-results -name "*.json" | wc -l)"
+            echo "Total JSON files found - $(find downloaded-results -name "*.json" | wc -l)"
           else
             echo "No downloaded-results directory found"
           fi
 
-          echo "Downloaded reports:"
+          echo "Downloaded reports check"
           if [ -d "downloaded-reports" ]; then
             ls -la downloaded-reports/
           else
             echo "No downloaded-reports directory found"
           fi
 
-          echo "=== STEP 1: Copy individual browser reports ==="
+          echo "=== STEP 1 - Copy individual browser reports ==="
           if [ -d "downloaded-reports" ]; then
             for report_dir in downloaded-reports/*/; do
               if [ -d "$report_dir" ]; then
@@ -150,273 +150,121 @@ jobs:
                 echo "Copying $report_name to comprehensive-report/"
                 cp -r "$report_dir" "comprehensive-report/$report_name"
                 
-                # Verify the copy worked
                 if [ -f "comprehensive-report/$report_name/index.html" ]; then
-                  echo "✅ $report_name copied successfully"
+                  echo "Success - $report_name copied successfully"
                 else
-                  echo "❌ $report_name copy failed - no index.html found"
+                  echo "Failed - $report_name copy failed - no index.html found"
                 fi
               fi
             done
           fi
 
-          echo "=== STEP 2: Create master combined report ==="
+          echo "=== STEP 2 - Create master combined report ==="
           if [ -d "downloaded-results" ]; then
             echo "Combining all JSON results for master report..."
             
-            # Copy all JSON files to master results
             find downloaded-results -name "*.json" -exec cp {} master-allure-results/ \; 2>/dev/null || true
             
-            echo "Master allure results collected:"
+            echo "Master allure results collected"
             ls -la master-allure-results/
             
             if [ "$(ls -A master-allure-results 2>/dev/null)" ]; then
               echo "Generating MASTER comprehensive Allure report..."
               allure generate master-allure-results --output comprehensive-report/master-allure-report --clean
               
-              # Verify master report was created
               if [ -f "comprehensive-report/master-allure-report/index.html" ]; then
-                echo "✅ Master Allure report generated successfully!"
-                echo "Master report files:"
+                echo "Success - Master Allure report generated successfully!"
+                echo "Master report files check"
                 ls -la comprehensive-report/master-allure-report/ | head -5
               else
-                echo "❌ Master report generation FAILED - no index.html created"
-                echo "Allure generate output was:"
+                echo "Failed - Master report generation FAILED - no index.html created"
+                echo "Allure generate output check"
                 ls -la comprehensive-report/
               fi
             else
-              echo "❌ No JSON results found for master report"
+              echo "Failed - No JSON results found for master report"
               echo "Creating fallback master report with summary..."
               mkdir -p comprehensive-report/master-allure-report
-              cat > comprehensive-report/master-allure-report/index.html << 'FALLBACK'
-              <!DOCTYPE html>
-              <html><head><title>Master Report</title></head>
-              <body><h1>Master Report</h1><p>No test results found for master report generation.</p></body>
-              </html>
-              FALLBACK
+              echo '<!DOCTYPE html><html><head><title>Master Report</title></head><body><h1>Master Report</h1><p>No test results found for master report generation.</p></body></html>' > comprehensive-report/master-allure-report/index.html
             fi
           else
-            echo "❌ No downloaded-results directory found"
+            echo "Failed - No downloaded-results directory found"
           fi
 
-          echo "=== FINAL: Verify comprehensive report structure ==="
-          echo "Comprehensive report contents:"
+          echo "=== FINAL - Verify comprehensive report structure ==="
+          echo "Comprehensive report contents check"
           find comprehensive-report -name "index.html" -type f
 
           echo "=== CREATING NAVIGATION INDEX ==="
-          cat > comprehensive-report/index.html << 'NAVINDEX'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Playwright Test Reports - Navigation</title>
-              <style>
-                  body { font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5; }
-                  .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                  h1 { color: #333; text-align: center; margin-bottom: 30px; }
-                  .report-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
-                  .report-link { display: inline-block; margin: 10px; padding: 15px 25px; background: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }
-                  .report-link:hover { background: #0052a3; }
-                  .master-report { background: #28a745; }
-                  .master-report:hover { background: #218838; }
-                  .note { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin: 15px 0; color: #856404; }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>🎭 Playwright Test Reports Dashboard</h1>
-                  
-                  <div class="report-section">
-                      <h2>📊 Master Comprehensive Report</h2>
-                      <p>Combined results from all browser test runs</p>
-                      <a href="master-allure-report/index.html" class="report-link master-report">📈 View Master Report</a>
-                  </div>
-                  
-                  <div class="report-section">
-                      <h2>🌐 Individual Browser Reports</h2>
-                      <p>Detailed reports for each browser environment</p>
-                      <a href="chromium-report/index.html" class="report-link">🟢 Chromium Report</a>
-                      <a href="firefox-report/index.html" class="report-link">🟠 Firefox Report</a>
-                      <a href="webkit-report/index.html" class="report-link">🔵 WebKit Report</a>
-                  </div>
-                  
-                  <div class="note">
-                      <strong>💡 Note:</strong> If any report links don't work, check that the corresponding tests ran successfully and generated reports. 
-                      The master report combines data from all successful browser test runs.
-                  </div>
-              </div>
-          </body>
-          </html>
-          NAVINDEX
 
-          echo "✅ Navigation index created at comprehensive-report/index.html"
-          echo "✅ Comprehensive report structure ready!"
+          echo '<!DOCTYPE html>' > comprehensive-report/index.html
+          echo '<html lang="en">' >> comprehensive-report/index.html
+          echo '<head>' >> comprehensive-report/index.html
+          echo '    <meta charset="UTF-8">' >> comprehensive-report/index.html
+          echo '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' >> comprehensive-report/index.html
+          echo '    <title>Playwright Test Reports - Navigation</title>' >> comprehensive-report/index.html
+          echo '    <style>' >> comprehensive-report/index.html
+          echo '        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5; }' >> comprehensive-report/index.html
+          echo '        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }' >> comprehensive-report/index.html
+          echo '        h1 { color: #333; text-align: center; margin-bottom: 30px; }' >> comprehensive-report/index.html
+          echo '        .report-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }' >> comprehensive-report/index.html
+          echo '        .report-link { display: inline-block; margin: 10px; padding: 15px 25px; background: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }' >> comprehensive-report/index.html
+          echo '        .report-link:hover { background: #0052a3; }' >> comprehensive-report/index.html
+          echo '        .master-report { background: #28a745; }' >> comprehensive-report/index.html
+          echo '        .master-report:hover { background: #218838; }' >> comprehensive-report/index.html
+          echo '        .note { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin: 15px 0; color: #856404; }' >> comprehensive-report/index.html
+          echo '    </style>' >> comprehensive-report/index.html
+          echo '</head>' >> comprehensive-report/index.html
+          echo '<body>' >> comprehensive-report/index.html
+          echo '    <div class="container">' >> comprehensive-report/index.html
+          echo '        <h1>Playwright Test Reports Dashboard</h1>' >> comprehensive-report/index.html
+          echo '        <div class="report-section">' >> comprehensive-report/index.html
+          echo '            <h2>Master Comprehensive Report</h2>' >> comprehensive-report/index.html
+          echo '            <p>Combined results from all browser test runs</p>' >> comprehensive-report/index.html
+          echo '            <a href="master-allure-report/index.html" class="report-link master-report">View Master Report</a>' >> comprehensive-report/index.html
+          echo '        </div>' >> comprehensive-report/index.html
+          echo '        <div class="report-section">' >> comprehensive-report/index.html
+          echo '            <h2>Individual Browser Reports</h2>' >> comprehensive-report/index.html
+          echo '            <p>Detailed reports for each browser environment</p>' >> comprehensive-report/index.html
+          echo '            <a href="allure-report-chromium/index.html" class="report-link">Chromium Report</a>' >> comprehensive-report/index.html
+          echo '            <a href="allure-report-firefox/index.html" class="report-link">Firefox Report</a>' >> comprehensive-report/index.html
+          echo '            <a href="allure-report-webkit/index.html" class="report-link">WebKit Report</a>' >> comprehensive-report/index.html
+          echo '        </div>' >> comprehensive-report/index.html
+          echo '        <div class="note">' >> comprehensive-report/index.html
+          echo '            <strong>Note:</strong> If any report links do not work, check that the corresponding tests ran successfully and generated reports.' >> comprehensive-report/index.html
+          echo '            The master report combines data from all successful browser test runs.' >> comprehensive-report/index.html
+          echo '        </div>' >> comprehensive-report/index.html
+          echo '    </div>' >> comprehensive-report/index.html
+          echo '</body>' >> comprehensive-report/index.html
+          echo '</html>' >> comprehensive-report/index.html
+
+          echo "Success - Navigation index created at comprehensive-report/index.html"
+          echo "Success - Comprehensive report structure ready!"
 
           echo "=== FINAL VERIFICATION ==="
-          echo "All generated files:"
+          echo "All generated files check"
           find comprehensive-report -type f -name "*.html" | sort
-
-      - name: Create Navigation Index
-        run: |
-          cat > comprehensive-report/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Comprehensive Playwright Test Reports</title>
-              <style>
-                  body {
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                      min-height: 100vh;
-                      margin: 0;
-                      padding: 20px;
-                      color: #333;
-                  }
-                  .container { max-width: 1200px; margin: 0 auto; }
-                  .header { text-align: center; color: white; padding: 3rem 0; }
-                  .header h1 { font-size: 3rem; margin-bottom: 1rem; }
-                  .main-card { 
-                      background: white;
-                      border-radius: 16px;
-                      padding: 3rem;
-                      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-                  }
-                  .status-bar {
-                      background: linear-gradient(45deg, #28a745, #20c997);
-                      color: white;
-                      padding: 1.5rem;
-                      border-radius: 12px;
-                      margin-bottom: 3rem;
-                      text-align: center;
-                  }
-                  .reports-grid {
-                      display: grid;
-                      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                      gap: 2rem;
-                      margin: 3rem 0;
-                  }
-                  .report-card {
-                      background: #f8f9fa;
-                      border: 3px solid #dee2e6;
-                      border-radius: 12px;
-                      padding: 2rem;
-                      text-align: center;
-                      transition: all 0.3s ease;
-                      text-decoration: none;
-                      color: inherit;
-                      display: block;
-                  }
-                  .report-card:hover {
-                      transform: translateY(-8px);
-                      border-color: #007bff;
-                      box-shadow: 0 15px 35px rgba(0,123,255,0.2);
-                  }
-                  .master-card {
-                      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-                      color: white;
-                      border: none;
-                  }
-                  .browser-card {
-                      background: linear-gradient(135deg, #4834d4 0%, #686de0 100%);
-                      color: white;
-                      border: none;
-                  }
-                  .report-emoji {
-                      font-size: 4rem;
-                      margin-bottom: 1rem;
-                      display: block;
-                  }
-                  .report-card h2 {
-                      margin: 0 0 1rem 0;
-                      font-size: 1.8rem;
-                  }
-                  .report-card p {
-                      margin-bottom: 1.5rem;
-                      opacity: 0.9;
-                  }
-                  .report-card strong {
-                      background: rgba(255,255,255,0.2);
-                      padding: 0.5rem 1rem;
-                      border-radius: 25px;
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <div class="header">
-                      <h1>🎭 Comprehensive Playwright Test Reports</h1>
-                      <p>Cross-Browser Test Analysis with Rich Visualizations</p>
-                  </div>
-                  
-                  <div class="main-card">
-                      <div class="status-bar">
-                          <h3>📊 Report Status: READY</h3>
-                          <p><strong>Repository:</strong> ${{ github.repository }}</p>
-                          <p><strong>Run ID:</strong> ${{ github.run_id }}</p>
-                      </div>
-                      
-                      <div class="reports-grid">
-                          <a href="master-allure-report/index.html" class="report-card master-card">
-                              <span class="report-emoji">🎯</span>
-                              <h2>Master Report</h2>
-                              <p>Combined cross-browser analysis</p>
-                              <strong>→ VIEW COMPLETE ANALYSIS ←</strong>
-                          </a>
-                          
-                          <a href="allure-report-chromium/index.html" class="report-card browser-card">
-                              <span class="report-emoji">🌐</span>
-                              <h2>Chromium</h2>
-                              <p>Chrome browser test results</p>
-                              <strong>→ VIEW CHROMIUM REPORT ←</strong>
-                          </a>
-                          
-                          <a href="allure-report-firefox/index.html" class="report-card browser-card">
-                              <span class="report-emoji">🦊</span>
-                              <h2>Firefox</h2>
-                              <p>Firefox browser test results</p>
-                              <strong>→ VIEW FIREFOX REPORT ←</strong>
-                          </a>
-                          
-                          <a href="allure-report-webkit/index.html" class="report-card browser-card">
-                              <span class="report-emoji">🧭</span>
-                              <h2>WebKit</h2>
-                              <p>Safari WebKit test results</p>
-                              <strong>→ VIEW WEBKIT REPORT ←</strong>
-                          </a>
-                      </div>
-                      
-                      <div style="text-align: center; margin-top: 3rem; color: #666;">
-                          <p><strong>Start with the Master Report</strong> for comprehensive overview</p>
-                          <p>Then explore individual browser reports for detailed analysis</p>
-                      </div>
-                  </div>
-              </div>
-          </body>
-          </html>
-          EOF
 
       - name: Upload Comprehensive Report
         uses: actions/upload-artifact@v4
         with:
-          name: COMPREHENSIVE-ALLURE-REPORT
+          name: comprehensive-test-reports
           path: comprehensive-report/
           retention-days: 30
 
       - name: Success Summary
+        if: always()
         run: |
           echo "SUCCESS! Comprehensive Allure reports generated!"
           echo ""
           echo "Available Reports:"
-          echo "  - COMPREHENSIVE-ALLURE-REPORT (Master + All browsers)"
+          echo "  - comprehensive-test-reports (Master + All browsers)"
           echo "  - Individual browser reports"
           echo ""
           echo "Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo ""
           echo "Instructions:"
-          echo "  1. Download COMPREHENSIVE-ALLURE-REPORT artifact"
+          echo "  1. Download comprehensive-test-reports artifact"
           echo "  2. Extract the ZIP file"
           echo "  3. Open index.html in your browser"
           echo "  4. Click Master Report for complete analysis"
