@@ -35,7 +35,12 @@ jobs:
       run: npm ci
       
     - name: Install Playwright browsers
-      run: npx playwright install --with-deps ${{ matrix.project }}
+      run: npx playwright install ${{ matrix.project }}
+      
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm-dev libxkbcommon-dev libxcomposite-dev libxdamage-dev libxrandr-dev libgbm-dev libxss-dev libasound2-dev
       
     - name: Run Playwright tests
       run: xvfb-run --auto-servernum -- npm run test:ci -- --project=${{ matrix.project }} --grep-invert "@visual"
