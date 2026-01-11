@@ -48,22 +48,64 @@ jobs:
           xvfb-run --auto-servernum -- npx playwright test \
             --project=${{ matrix.browser }} \
             --grep-invert "@visual" \
-            --reporter=html || echo "Tests completed with status $?"
+            --reporter=html \
+            --output-dir=test-results-${{ matrix.browser }} || echo "Tests completed with status $?"
         continue-on-error: true
 
       - name: Copy reports to output
         if: always()
         run: |
-          # Copy all possible report locations to output
-          [ -d "test-results" ] && cp -r test-results/* output/ 2>/dev/null || true
-          [ -d "playwright-report" ] && cp -r playwright-report/* output/ 2>/dev/null || true
-          # Create index if reports exist
-          if [ "$(ls -A output/ 2>/dev/null)" ]; then
-            echo "<h1>Test Results - ${{ matrix.browser }}</h1>" > output/index.html
-            echo "<p>Generated on $(date)</p>" >> output/index.html
-            ls -la output/ >> output/files.txt
+          # Ensure output directory exists
+          mkdir -p output
+
+          # Copy Playwright HTML report (configured location: test-results/html-report)
+          if [ -d "test-results/html-report" ]; then
+            echo "📊 Copying Playwright HTML report from test-results/html-report..."
+            cp -r test-results/html-report/* output/ 2>/dev/null || true
+          fi
+
+          # Also check default playwright-report location (fallback)
+          if [ -d "playwright-report" ] && [ -z "$(ls -A output 2>/dev/null)" ]; then
+            echo "📊 Copying Playwright HTML report from playwright-report..."
+            cp -r playwright-report/* output/ 2>/dev/null || true
+          fi
+
+          # Copy any other test results
+          if [ -d "test-results-${{ matrix.browser }}" ]; then
+            echo "📁 Copying test results..."
+            cp -r test-results-${{ matrix.browser }}/* output/ 2>/dev/null || true
+          fi
+
+          # List contents for debugging
+          echo "📋 Output directory contents:"
+          ls -la output/ 2>/dev/null || echo "Output directory is empty"
+
+          # Only create fallback index if no real reports exist
+          if [ ! -f "output/index.html" ] && [ -z "$(find output -name '*.html' 2>/dev/null)" ]; then
+            echo "⚠️ No HTML reports found - creating fallback page"
+            cat > output/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Test Results - ${{ matrix.browser }}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .status { padding: 20px; border-radius: 8px; background: #f0f8ff; }
+            </style>
+          </head>
+          <body>
+            <div class="status">
+              <h1>🎭 Test Results - ${{ matrix.browser }}</h1>
+              <p><strong>Generated:</strong> $(date)</p>
+              <p><strong>Status:</strong> Tests completed but no HTML report was generated</p>
+              <p><strong>Repository:</strong> ${{ github.repository }}</p>
+              <p><strong>Run:</strong> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">${{ github.run_id }}</a></p>
+            </div>
+          </body>
+          </html>
+          HTMLEOF
           else
-            echo "<h1>No reports generated for ${{ matrix.browser }}</h1>" > output/index.html
+            echo "✅ HTML report found and copied successfully"
           fi
 
       - name: Upload artifacts
@@ -94,7 +136,7 @@ jobs:
           mkdir -p final-report
 
           # Create markdown summary
-          cat > final-report/TEST_REPORT.md << 'EOF'
+          cat > final-report/TEST_REPORT.md << 'MDEOF'
           # 🎭 Playwright Test Report
 
           **Generated:** $(date)  
@@ -107,7 +149,7 @@ jobs:
 
           This report contains test results from multiple browsers:
 
-          EOF
+          MDEOF
 
           # List available reports
           if [ -d "reports" ]; then
