@@ -14,6 +14,11 @@ permissions:
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 env:
   TEST_ENV: test
 
@@ -65,12 +70,9 @@ jobs:
         
     - name: Upload HTML report to GitHub Pages
       if: always() && matrix.project == 'chromium' && github.ref == 'refs/heads/main'
-      uses: peaceiris/actions-gh-pages@v4
+      uses: actions/upload-pages-artifact@v3
       with:
-        personal_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: playwright-report
-        destination_dir: test-reports/${{ github.run_number }}
-        force_orphan: true
+        path: playwright-report
 
   smoke-tests:
     timeout-minutes: 10
@@ -270,11 +272,16 @@ jobs:
         pattern: playwright-results-*
         merge-multiple: true
         path: all-results
-        
+
+  # Deployment job
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: [test, deploy-reports]
+    steps:
     - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4
-      if: github.ref == 'refs/heads/main'
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: all-results
-        destination_dir: reports/latest
+      id: deployment
+      uses: actions/deploy-pages@v4
