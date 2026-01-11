@@ -48,8 +48,7 @@ jobs:
           xvfb-run --auto-servernum -- npx playwright test \
             --project=${{ matrix.browser }} \
             --grep-invert "@visual" \
-            --reporter=html \
-            --output-dir=test-results-${{ matrix.browser }} || echo "Tests completed with status $?"
+            --reporter=html || echo "Tests completed with status $?"
         continue-on-error: true
 
       - name: Copy reports to output
@@ -70,13 +69,15 @@ jobs:
             cp -r playwright-report/* output/ 2>/dev/null || true
           fi
 
-          # Copy any other test results
-          if [ -d "test-results-${{ matrix.browser }}" ]; then
-            echo "📁 Copying test results..."
-            cp -r test-results-${{ matrix.browser }}/* output/ 2>/dev/null || true
+          # Copy any test-results content
+          if [ -d "test-results" ] && [ -z "$(ls -A output 2>/dev/null)" ]; then
+            echo "📁 Copying from test-results directory..."
+            find test-results -name "*.html" -exec cp -r {} output/ \; 2>/dev/null || true
           fi
 
           # List contents for debugging
+          echo "📋 Available directories:"
+          ls -la . | grep test || echo "No test directories found"
           echo "📋 Output directory contents:"
           ls -la output/ 2>/dev/null || echo "Output directory is empty"
 
