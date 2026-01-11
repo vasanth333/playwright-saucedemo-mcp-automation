@@ -1,4 +1,4 @@
-name: Comprehensive Playwright Allure Reports
+name: Playwright Allure Reports
 
 on:
   push:
@@ -7,262 +7,116 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 jobs:
   test:
-    timeout-minutes: 30
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Install Playwright Browser
-        run: npx playwright install ${{ matrix.browser }} --with-deps
+      - run: npx playwright install --with-deps
 
-      - name: Install Allure CLI
+      - name: Install Allure
         run: |
-          curl -o allure.tgz -L https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
+          curl -L -o allure.tgz https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
           tar -zxf allure.tgz
           sudo mv allure-* /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
-          allure --version
 
-      - name: Run Tests and Generate Reports
+      - name: Run tests
         run: |
-          echo "Starting ${{ matrix.browser }} tests with Allure reporting..."
+          export ALLURE_RESULTS_DIRECTORY=allure-results-${{ matrix.browser }}
 
-          xvfb-run --auto-servernum -- npx playwright test \
+          npx playwright test \
             --project=${{ matrix.browser }} \
-            --grep-invert "@visual" \
-            --headed=false \
-            --reporter=allure-playwright \
-            || echo "Tests completed with exit code $?"
+            --reporter=allure-playwright || true
 
-          echo "Test execution completed for ${{ matrix.browser }}"
-          ls -la
+          allure generate allure-results-${{ matrix.browser }} \
+            -o allure-report-${{ matrix.browser }} --clean
 
-          if [ -d "allure-results" ] && [ "$(ls -A allure-results 2>/dev/null)" ]; then
-            echo "Found Allure results, generating HTML report..."
-            ls -la allure-results/
-            
-            allure generate allure-results --output allure-report-${{ matrix.browser }} --clean
-            
-            if [ -d "allure-report-${{ matrix.browser }}" ]; then
-              echo "Allure HTML report generated successfully for ${{ matrix.browser }}"
-              ls -la allure-report-${{ matrix.browser }}/
-            else
-              echo "Failed to generate Allure HTML report"
-            fi
-          else
-            echo "No Allure results found for ${{ matrix.browser }}"
-          fi
-        continue-on-error: true
-
-      - name: Upload Browser Report
+      - name: Upload browser report
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: allure-report-${{ matrix.browser }}
           path: allure-report-${{ matrix.browser }}/*
-          retention-days: 30
 
-      - name: Upload Allure Results
+      - name: Upload browser results
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: allure-results-${{ matrix.browser }}
-          path: allure-results/*
-          retention-days: 30
+          path: allure-results-${{ matrix.browser }}/*
 
-  comprehensive-report:
-    if: always()
+  build-and-deploy:
     needs: test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Allure CLI
+      - name: Install Allure
         run: |
-          curl -o allure.tgz -L https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
+          curl -L -o allure.tgz https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
           tar -zxf allure.tgz
           sudo mv allure-* /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
-          allure --version
 
-      - name: Download All Allure Results
+      - name: Download all results
         uses: actions/download-artifact@v4
         with:
           pattern: allure-results-*
-          path: downloaded-results/
+          path: all-results
           merge-multiple: true
 
-      - name: Download All Browser Reports
+      - name: Download all reports
         uses: actions/download-artifact@v4
         with:
           pattern: allure-report-*
-          path: downloaded-reports/
+          path: site
           merge-multiple: true
 
-      - name: Create Master Comprehensive Report
+      - name: Build master report
         run: |
-          mkdir -p comprehensive-report
-          mkdir -p master-allure-results
+          mkdir master-results
+          find all-results -name "*.json" -exec cp {} master-results \;
 
-          echo "=== DEBUGGING - Available downloads ==="
-          echo "Downloaded results check"
-          if [ -d "downloaded-results" ]; then
-            find downloaded-results -type f -name "*.json" | head -10
-            echo "Total JSON files found - $(find downloaded-results -name "*.json" | wc -l)"
-          else
-            echo "No downloaded-results directory found"
-          fi
+          allure generate master-results \
+            -o site/master-allure-report --clean
 
-          echo "Downloaded reports check"
-          if [ -d "downloaded-reports" ]; then
-            ls -la downloaded-reports/
-          else
-            echo "No downloaded-reports directory found"
-          fi
+          cat <<EOF > site/index.html
+          <!DOCTYPE html>
+          <html>
+          <head><title>Playwright Allure Reports</title></head>
+          <body>
+            <h1>Playwright Allure Reports</h1>
+            <ul>
+              <li><a href="master-allure-report/index.html">Master Report</a></li>
+              <li><a href="allure-report-chromium/index.html">Chromium</a></li>
+              <li><a href="allure-report-firefox/index.html">Firefox</a></li>
+              <li><a href="allure-report-webkit/index.html">WebKit</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
 
-          echo "=== STEP 1 - Copy individual browser reports ==="
-          if [ -d "downloaded-reports" ]; then
-            for report_dir in downloaded-reports/*/; do
-              if [ -d "$report_dir" ]; then
-                report_name=$(basename "$report_dir")
-                echo "Copying $report_name to comprehensive-report/"
-                cp -r "$report_dir" "comprehensive-report/$report_name"
-                
-                if [ -f "comprehensive-report/$report_name/index.html" ]; then
-                  echo "Success - $report_name copied successfully"
-                else
-                  echo "Failed - $report_name copy failed - no index.html found"
-                fi
-              fi
-            done
-          fi
-
-          echo "=== STEP 2 - Create master combined report ==="
-          if [ -d "downloaded-results" ]; then
-            echo "Combining all JSON results for master report..."
-            
-            find downloaded-results -name "*.json" -exec cp {} master-allure-results/ \; 2>/dev/null || true
-            
-            echo "Master allure results collected"
-            ls -la master-allure-results/
-            
-            if [ "$(ls -A master-allure-results 2>/dev/null)" ]; then
-              echo "Generating MASTER comprehensive Allure report..."
-              allure generate master-allure-results --output comprehensive-report/master-allure-report --clean
-              
-              if [ -f "comprehensive-report/master-allure-report/index.html" ]; then
-                echo "Success - Master Allure report generated successfully!"
-                echo "Master report files check"
-                ls -la comprehensive-report/master-allure-report/ | head -5
-              else
-                echo "Failed - Master report generation FAILED - no index.html created"
-                echo "Allure generate output check"
-                ls -la comprehensive-report/
-              fi
-            else
-              echo "Failed - No JSON results found for master report"
-              echo "Creating fallback master report with summary..."
-              mkdir -p comprehensive-report/master-allure-report
-              echo '<!DOCTYPE html><html><head><title>Master Report</title></head><body><h1>Master Report</h1><p>No test results found for master report generation.</p></body></html>' > comprehensive-report/master-allure-report/index.html
-            fi
-          else
-            echo "Failed - No downloaded-results directory found"
-          fi
-
-          echo "=== FINAL - Verify comprehensive report structure ==="
-          echo "Comprehensive report contents check"
-          find comprehensive-report -name "index.html" -type f
-
-          echo "=== CREATING NAVIGATION INDEX ==="
-
-          echo '<!DOCTYPE html>' > comprehensive-report/index.html
-          echo '<html lang="en">' >> comprehensive-report/index.html
-          echo '<head>' >> comprehensive-report/index.html
-          echo '    <meta charset="UTF-8">' >> comprehensive-report/index.html
-          echo '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' >> comprehensive-report/index.html
-          echo '    <title>Playwright Test Reports - Navigation</title>' >> comprehensive-report/index.html
-          echo '    <style>' >> comprehensive-report/index.html
-          echo '        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5; }' >> comprehensive-report/index.html
-          echo '        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }' >> comprehensive-report/index.html
-          echo '        h1 { color: #333; text-align: center; margin-bottom: 30px; }' >> comprehensive-report/index.html
-          echo '        .report-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }' >> comprehensive-report/index.html
-          echo '        .report-link { display: inline-block; margin: 10px; padding: 15px 25px; background: #0066cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }' >> comprehensive-report/index.html
-          echo '        .report-link:hover { background: #0052a3; }' >> comprehensive-report/index.html
-          echo '        .master-report { background: #28a745; }' >> comprehensive-report/index.html
-          echo '        .master-report:hover { background: #218838; }' >> comprehensive-report/index.html
-          echo '        .note { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; padding: 15px; margin: 15px 0; color: #856404; }' >> comprehensive-report/index.html
-          echo '    </style>' >> comprehensive-report/index.html
-          echo '</head>' >> comprehensive-report/index.html
-          echo '<body>' >> comprehensive-report/index.html
-          echo '    <div class="container">' >> comprehensive-report/index.html
-          echo '        <h1>Playwright Test Reports Dashboard</h1>' >> comprehensive-report/index.html
-          echo '        <div class="report-section">' >> comprehensive-report/index.html
-          echo '            <h2>Master Comprehensive Report</h2>' >> comprehensive-report/index.html
-          echo '            <p>Combined results from all browser test runs</p>' >> comprehensive-report/index.html
-          echo '            <a href="master-allure-report/index.html" class="report-link master-report">View Master Report</a>' >> comprehensive-report/index.html
-          echo '        </div>' >> comprehensive-report/index.html
-          echo '        <div class="report-section">' >> comprehensive-report/index.html
-          echo '            <h2>Individual Browser Reports</h2>' >> comprehensive-report/index.html
-          echo '            <p>Detailed reports for each browser environment</p>' >> comprehensive-report/index.html
-          echo '            <a href="allure-report-chromium/index.html" class="report-link">Chromium Report</a>' >> comprehensive-report/index.html
-          echo '            <a href="allure-report-firefox/index.html" class="report-link">Firefox Report</a>' >> comprehensive-report/index.html
-          echo '            <a href="allure-report-webkit/index.html" class="report-link">WebKit Report</a>' >> comprehensive-report/index.html
-          echo '        </div>' >> comprehensive-report/index.html
-          echo '        <div class="note">' >> comprehensive-report/index.html
-          echo '            <strong>Note:</strong> If any report links do not work, check that the corresponding tests ran successfully and generated reports.' >> comprehensive-report/index.html
-          echo '            The master report combines data from all successful browser test runs.' >> comprehensive-report/index.html
-          echo '        </div>' >> comprehensive-report/index.html
-          echo '    </div>' >> comprehensive-report/index.html
-          echo '</body>' >> comprehensive-report/index.html
-          echo '</html>' >> comprehensive-report/index.html
-
-          echo "Success - Navigation index created at comprehensive-report/index.html"
-          echo "Success - Comprehensive report structure ready!"
-
-          echo "=== FINAL VERIFICATION ==="
-          echo "All generated files check"
-          find comprehensive-report -type f -name "*.html" | sort
-
-      - name: Upload Comprehensive Report
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: comprehensive-test-reports
-          path: comprehensive-report/
-          retention-days: 30
+          path: site
 
-      - name: Success Summary
-        if: always()
-        run: |
-          echo "SUCCESS! Comprehensive Allure reports generated!"
-          echo ""
-          echo "Available Reports:"
-          echo "  - comprehensive-test-reports (Master + All browsers)"
-          echo "  - Individual browser reports"
-          echo ""
-          echo "Download from: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo ""
-          echo "Instructions:"
-          echo "  1. Download comprehensive-test-reports artifact"
-          echo "  2. Extract the ZIP file"
-          echo "  3. Open index.html in your browser"
-          echo "  4. Click Master Report for complete analysis"
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
