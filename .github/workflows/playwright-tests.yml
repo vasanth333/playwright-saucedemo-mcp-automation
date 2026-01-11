@@ -7,7 +7,6 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
   pages: write
   id-token: write
 
@@ -68,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install Allure
         run: |
           curl -L -o allure.tgz https://github.com/allure-framework/allure2/releases/download/2.25.0/allure-2.25.0.tgz
@@ -91,11 +92,26 @@ jobs:
 
       - name: Build master report
         run: |
-          mkdir master-results
-          find all-results -name "*.json" -exec cp {} master-results \;
+          mkdir -p site
+          mkdir -p master-results
 
-          allure generate master-results \
-            -o site/master-allure-report --clean
+          echo "Checking downloaded allure results..."
+
+          if [ -d "all-results" ]; then
+            echo "Found all-results directory"
+            find all-results -name "*.json" -exec cp {} master-results \;
+          else
+            echo "WARNING: all-results directory not found"
+          fi
+
+          if [ "$(ls -A master-results 2>/dev/null)" ]; then
+            echo "Generating MASTER Allure report"
+            allure generate master-results -o site/master-allure-report --clean
+          else
+            echo "No results found — creating fallback report"
+            mkdir -p site/master-allure-report
+            echo "<html><body><h1>No test results found</h1></body></html>" > site/master-allure-report/index.html
+          fi
 
           cat <<EOF > site/index.html
           <!DOCTYPE html>
