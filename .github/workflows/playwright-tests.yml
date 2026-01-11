@@ -123,34 +123,38 @@ jobs:
 
       - name: Create Master Comprehensive Report
         run: |
-          mkdir -p master-allure-results
           mkdir -p comprehensive-report
 
           echo "Combining all Allure results for comprehensive report..."
 
-          if [ -d "downloaded-results" ]; then
-            echo "Found downloaded results:"
-            find downloaded-results -name "*.json" -exec cp {} master-allure-results/ \; 2>/dev/null || true
+          if [ -d "downloaded-reports" ]; then
+            echo "Found downloaded browser reports:"
+            ls -la downloaded-reports/
             
-            echo "Combined Allure results:"
-            ls -la master-allure-results/
-            
-            if [ "$(ls -A master-allure-results 2>/dev/null)" ]; then
-              echo "Generating MASTER comprehensive Allure report..."
-              allure generate master-allure-results --output comprehensive-report/master-allure-report --clean
-              
-              if [ -d "comprehensive-report/master-allure-report" ]; then
-                echo "MASTER Allure report generated successfully!"
-                ls -la comprehensive-report/master-allure-report/
+            for report_dir in downloaded-reports/*/; do
+              if [ -d "$report_dir" ]; then
+                report_name=$(basename "$report_dir")
+                echo "Copying $report_name..."
+                cp -r "$report_dir" "comprehensive-report/$report_name"
               fi
-            else
-              echo "No combined results found"
-            fi
+            done
+            
+            echo "Browser reports copied to comprehensive-report:"
+            ls -la comprehensive-report/
           fi
 
-          if [ -d "downloaded-reports" ]; then
-            echo "Copying individual browser reports..."
-            cp -r downloaded-reports/* comprehensive-report/ 2>/dev/null || true
+          mkdir -p master-allure-results
+          if [ -d "downloaded-results" ]; then
+            echo "Found Allure results for master report:"
+            find downloaded-results -name "*.json" -exec cp {} master-allure-results/ \; 2>/dev/null || true
+            
+            if [ "$(ls -A master-allure-results 2>/dev/null)" ]; then
+              echo "Generating master comprehensive Allure report..."
+              allure generate master-allure-results --output comprehensive-report/master-allure-report --clean
+              
+              echo "Master report generated:"
+              ls -la comprehensive-report/master-allure-report/
+            fi
           fi
 
       - name: Create Navigation Index
